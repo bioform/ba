@@ -1,17 +1,18 @@
 package model
 
 import (
-	"gorm.io/gorm"
 	"fmt"
-)
 
+	"github.com/bioform/ba"
+	"gorm.io/gorm"
+)
 
 type User struct {
 	gorm.Model
-	action.Performer `gorm:"-"`
+	ba.Performer `gorm:"-"`
 
-	Name         string
-	Email        string `gorm:"unique;not null"`
+	Name  string
+	Email string `gorm:"unique;not null"`
 }
 
 type EmailDuplicateError struct {

@@ -4,41 +4,34 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/bioform/ba/pkg/action"
+	"github.com/bioform/ba"
 	"gorm.io/gorm"
 )
 
 type BaseAction struct {
-	action.BaseAction
+	ba.BaseAction
 	api API
 }
 
-func (ba *BaseAction) SetContext(ctx context.Context) {
-	ba.BaseAction.SetContext(ctx)
+func (b *BaseAction) SetContext(ctx context.Context) {
+	b.BaseAction.SetContext(ctx)
 
 	api, err := From(ctx)
 	if err != nil {
 		panic(fmt.Errorf("set api: %w", err))
 	}
 
-	ba.api = api
+	b.api = api
 }
 
-func (ba *BaseAction) TransactionProvider() action.TransactionProvider {
-	return ba.api
+func (b *BaseAction) TransactionProvider() ba.TransactionProvider {
+	return b.api
 }
 
-func (ba *BaseAction) Performer() action.Performer {
-	if performer := ba.BaseAction.Performer(); performer == nil {
-		ba.SetPerformer(ctxstore.GetUser(ba.Context()))
-	}
-	return ba.BaseAction.Performer()
+func (b BaseAction) API() API {
+	return b.api
 }
 
-func (ba BaseAction) API() API {
-	return ba.api
-}
-
-func (ba BaseAction) DB() (*gorm.DB, error) {
-	return ba.api.DB(), nil
+func (b BaseAction) DB() *gorm.DB {
+	return b.api.DB()
 }

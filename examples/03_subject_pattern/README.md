@@ -26,6 +26,8 @@ func (a *UpdateUserName) IsAllowed() (bool, error) {
 
 The library does not enforce the pattern. It's a convention worth adopting because it makes authorization and tests express intent.
 
+*Incidentally also showcases `attr.Required[T]` validating `NewName` — distinguishes "caller omitted the field" from "caller passed empty string".*
+
 Run it:
 
 ```sh

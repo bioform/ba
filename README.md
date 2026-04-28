@@ -9,7 +9,7 @@ A small, generic Go library for structuring business operations as **actions**: 
 3. **ORM-independent.** The library defines a `TransactionProvider` interface; the `examples/` happen to use GORM, but the core has no DB dependency. Plug in `database/sql`, ent, sqlx, or any custom store.
 4. **First-class `Performer` concept.** Every action has a Performer (typically a user; `ba.SystemPerformer` for system calls). `IsAllowed()` decides whether this performer may run the action; `As(performer)` and `AsSystem()` set it explicitly. Authorization is not bolted on — it's a primitive.
 5. **Built-in tracing simplifies testing.** `ba.CallTracker` is a package-level hook every `ba.New(...)` registers with; combined with `matcher.CallAction`, tests can assert "this BA called BA-X with these fields, as system, via Try" without mocking the full call graph.
-6. **Optional attributes via `attr.Type[T]`.** Distinguishes "unset" from "zero-value" (e.g., `int(0)` vs. unset). Plays nicely with [govalidator](https://github.com/rezakhademix/govalidator) via `attr.Required[T]`.
+6. **Optional attributes via `attr.Type[T]`.** Distinguishes "unset" from "zero-value" (e.g., `int(0)` vs. unset) — useful for conditional defaults in `Init()` and for "set and non-empty" validation via `attr.Required[T]` (plays nicely with [govalidator](https://github.com/rezakhademix/govalidator)). Using `attr` is itself optional — the core library has no dependency on it, and action fields can be plain Go types; the examples adopt it as a convention.
 
 ## Install
 
@@ -118,7 +118,7 @@ type UpdateUserName struct {
 }
 ```
 
-Compare to creator-style actions (`CreateUser`, `MyAction` in example1) where there is no pre-existing subject — the action *produces* the entity from input. The distinction makes authorization read naturally — `IsAllowed` asks "may this `Performer()` modify `User`?" — and lets matcher assertions express intent clearly:
+Compare to creator-style actions (`CreateUser` in [`01_basic`](./examples/01_basic)) where there is no pre-existing subject — the action *produces* the entity from input. The distinction makes authorization read naturally — `IsAllowed` asks "may this `Performer()` modify `User`?" — and lets matcher assertions express intent clearly:
 
 ```go
 matcher.CallAction(&UpdateUserName{User: targetUser}).

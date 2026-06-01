@@ -1,14 +1,12 @@
 package main_test
 
 import (
-	"context"
 	"testing"
 
 	main "github.com/bioform/ba/examples/04_nested_transactions"
 
 	"github.com/bioform/ba"
 	"github.com/bioform/ba/examples/pkg/api"
-	"github.com/bioform/ba/examples/pkg/database"
 	"github.com/bioform/ba/examples/pkg/model"
 
 	"github.com/bioform/ba/attr"
@@ -19,8 +17,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// newTestDB builds a fresh in-memory database so the savepoint test is
-// isolated from the package-global database.Default().
+// newTestDB builds a fresh in-memory database so each test is isolated from
+// the package-global database.Default() and from other tests.
 func newTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{TranslateError: true})
@@ -30,6 +28,11 @@ func newTestDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(&model.User{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	t.Cleanup(func() {
+		if sqlDB, err := db.DB(); err == nil {
+			sqlDB.Close()
+		}
+	})
 	return db
 }
 
@@ -53,22 +56,21 @@ func TestNestedSavepointRollsBackInner(t *testing.T) {
 }
 
 func TestActionA(t *testing.T) {
-	RegisterTestingT(t)
+	g := NewWithT(t)
 
-	ctx := api.New(database.Default()).AddTo(context.Background())
+	ctx := api.New(newTestDB(t)).AddTo(t.Context())
 
 	// ActionB is stubbed (no AndCallOriginal): the matcher verifies the call
 	// shape — ActionA invoked ActionB as system with these attrs — without
 	// running ActionB's body. The savepoint-rollback behavior of the real
-	// ActionB is exercised by `go run ./examples/04_nested_transactions`.
-	Expect(func() {
+	// ActionB is exercised by TestNestedSavepointRollsBackInner.
+	g.Expect(func() {
 		ok, err := ba.New(ctx, &main.ActionA{
 			AttrA: attr.Value("Hello, World!!!!"),
 		}).Perform()
 
-		if err != nil || !ok {
-			t.Errorf("Error performing action: %v", err)
-		}
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(ok).To(BeTrue())
 	}).To(CallAction(&main.ActionB{}).
 		AsSystem().
 		With(Fields{

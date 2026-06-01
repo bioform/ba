@@ -12,18 +12,22 @@ import (
 	. "github.com/onsi/gomega/gstruct"
 )
 
-// childAction is a minimal real action used to exercise the matcher. Its body
-// returns err, so tests can tell stubbed calls (body skipped) apart from
-// AndCallOriginal calls (body run).
+// childAction is a minimal real action used to exercise the matcher. It records
+// whether its body ran (performed) so tests can tell stubbed calls (body
+// skipped) apart from AndCallOriginal calls (body run), and returns err.
 type childAction struct {
 	ba.BaseAction
 
-	Name string
-	Num  attr.Type[int]
-	err  error
+	Name      string
+	Num       attr.Type[int]
+	err       error
+	performed bool
 }
 
-func (a *childAction) Perform() error                              { return a.err }
+func (a *childAction) Perform() error {
+	a.performed = true
+	return a.err
+}
 func (a *childAction) TransactionProvider() ba.TransactionProvider { return dummy.TransactionProvider{} }
 
 type otherAction struct {
@@ -34,7 +38,9 @@ func (a *otherAction) Perform() error                              { return nil 
 func (a *otherAction) TransactionProvider() ba.TransactionProvider { return dummy.TransactionProvider{} }
 
 // resetTracker isolates each test from the global ba.CallTracker the matcher
-// installs (and, prior to the save/restore fix, leaves behind).
+// installs (and, prior to the save/restore fix, leaves behind). Because
+// ba.CallTracker is process-global mutable state, tests using it must NOT call
+// t.Parallel().
 func resetTracker(t *testing.T) {
 	t.Helper()
 	ba.CallTracker = nil
@@ -53,37 +59,36 @@ func TestMatchStubsBodyByDefault(t *testing.T) {
 		}).
 		ViaPerform()
 
+	// err is non-nil, but because the body is stubbed it never runs, so the
+	// match still succeeds.
+	a := &childAction{
+		Name: "hi",
+		Num:  attr.Value(7),
+		err:  errors.New("body must not run when stubbed"),
+	}
 	ok, err := m.Match(func() {
-		// err is non-nil, but because the body is stubbed it never runs, so
-		// the match still succeeds.
-		ba.New(t.Context(), &childAction{
-			Name: "hi",
-			Num:  attr.Value(7),
-			err:  errors.New("body must not run when stubbed"),
-		}).AsSystem().Perform()
+		ba.New(t.Context(), a).AsSystem().Perform()
 	})
 
 	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(ok).To(BeTrue())
+	g.Expect(a.performed).To(BeFalse(), "stubbed call must not run the action body")
 }
 
 func TestMatchAndCallOriginalRunsBody(t *testing.T) {
 	g := NewWithT(t)
 	resetTracker(t)
 
-	ran := false
 	m := CallAction(&childAction{}).AsSystem().AndCallOriginal()
 
+	a := &childAction{Name: "real"}
 	ok, err := m.Match(func() {
-		a := &childAction{Name: "real"}
-		a.err = nil
 		ba.New(t.Context(), a).AsSystem().Perform()
-		ran = a.err == nil // body executed without error
 	})
 
 	g.Expect(err).ToNot(HaveOccurred())
 	g.Expect(ok).To(BeTrue())
-	g.Expect(ran).To(BeTrue())
+	g.Expect(a.performed).To(BeTrue(), "AndCallOriginal must run the real action body")
 }
 
 func TestMatchAndCallOriginalRejectsFailingBody(t *testing.T) {
@@ -258,12 +263,13 @@ func TestCallActionEndToEndNegated(t *testing.T) {
 	}).ShouldNot(CallAction(&childAction{}))
 }
 
-func TestMatchSecondCallIsUnexpected(t *testing.T) {
+func TestMatchExtraCallDoesNotBreakConfiguredMatch(t *testing.T) {
 	g := NewWithT(t)
 	resetTracker(t)
 
-	// Only one call is configured; a second invocation of the same action is
-	// recorded as unexpected but the configured call still matches.
+	// Only one call is configured; a second invocation of the same action
+	// exercises the tracker's unexpected-call path (an internal flag with no
+	// public observable), and the configured call must still match.
 	m := CallAction(&childAction{}).AsSystem()
 
 	ok, err := m.Match(func() {

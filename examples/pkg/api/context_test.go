@@ -23,6 +23,18 @@ func TestFromReturnsErrInvalidAPI(t *testing.T) {
 	g.Expect(err).To(MatchError(ErrInvalidAPI))
 }
 
+func TestFromReturnsStoredNilAPI(t *testing.T) {
+	g := NewWithT(t)
+
+	// A typed-nil *api stored under the key is a non-nil interface, so From's
+	// nil and type-assertion checks both pass and it returns (nil, nil). This
+	// locks in that edge behavior.
+	ctx := context.WithValue(t.Context(), apiKey, (*api)(nil))
+	got, err := From(ctx)
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(got).To(BeNil())
+}
+
 func TestAddToRoundTrip(t *testing.T) {
 	g := NewWithT(t)
 

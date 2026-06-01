@@ -28,15 +28,18 @@ func TestBaseActionDefaults(t *testing.T) {
 
 	b := &ba.BaseAction{}
 
-	checks := map[string]func() (bool, error){
-		"IsAllowed": b.IsAllowed,
-		"IsEnabled": b.IsEnabled,
-		"IsValid":   b.IsValid,
+	checks := []struct {
+		name  string
+		check func() (bool, error)
+	}{
+		{"IsAllowed", b.IsAllowed},
+		{"IsEnabled", b.IsEnabled},
+		{"IsValid", b.IsValid},
 	}
-	for name, check := range checks {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range checks {
+		t.Run(tc.name, func(t *testing.T) {
 			g := NewWithT(t)
-			ok, err := check()
+			ok, err := tc.check()
 			g.Expect(ok).To(BeTrue())
 			g.Expect(err).ToNot(HaveOccurred())
 		})

@@ -11,8 +11,9 @@ import (
 func TestNewActionImplementsAction(t *testing.T) {
 	g := NewWithT(t)
 
-	var _ ba.Action = dummy.NewAction(t)
-	g.Expect(dummy.NewAction(t)).ToNot(BeNil())
+	a := dummy.NewAction(t)
+	var _ ba.Action = a
+	g.Expect(a).ToNot(BeNil())
 }
 
 // TestPerformerOverridePreventsRecursion guards the dummy.Action.Performer

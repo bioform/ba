@@ -41,7 +41,7 @@ func (v Type[T]) String() string {
 //   - pointers, channels, and functions must be non-nil;
 //   - any other type (numbers, bools, structs, …) counts as present once set.
 //
-// Note: the check uses the dynamic value, so a set-but-typed-nil pointer (e.g.
+// The check uses the dynamic value, so a set-but-typed-nil pointer (e.g.
 // attr.Value((*T)(nil))) or a nil slice/map is correctly reported as not
 // satisfied — the typed nil does not masquerade as present.
 //
@@ -55,27 +55,14 @@ func Required[T any](v Type[T]) bool {
 		return false
 	}
 
-	switch val := any(v.val).(type) {
-	case string:
-		return val != ""
-	case []byte:
-		return len(val) > 0
-	case []rune:
-		return len(val) > 0
-	case []int:
-		return len(val) > 0
-	default:
-		rv := reflect.ValueOf(v.val)
-		if !rv.IsValid() {
-			return false // a nil interface value
-		}
-		switch rv.Kind() {
-		case reflect.Pointer, reflect.Chan, reflect.Func:
-			return !rv.IsNil()
-		case reflect.Slice, reflect.Map:
-			return rv.Len() > 0
-		default:
-			return true
-		}
+	switch rv := reflect.ValueOf(v.val); rv.Kind() {
+	case reflect.Invalid: // a set-but-nil interface value
+		return false
+	case reflect.String, reflect.Slice, reflect.Map, reflect.Array:
+		return rv.Len() > 0
+	case reflect.Pointer, reflect.Chan, reflect.Func:
+		return !rv.IsNil()
+	default: // numbers, bools, structs, … — present once set
+		return true
 	}
 }

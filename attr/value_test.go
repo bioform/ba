@@ -72,17 +72,22 @@ func TestRequired(t *testing.T) {
 		{"[]int empty", func() bool { return attr.Required(attr.Value([]int{})) }, false},
 		{"[]int unset", func() bool { return attr.Required(attr.Type[[]int]{}) }, false},
 
-		// Default branch: any set value counts, even the zero value.
+		// Default branch: a set non-nilable value counts, even the zero value.
 		{"int zero but set", func() bool { return attr.Required(attr.Value(0)) }, true},
 		{"int non-zero", func() bool { return attr.Required(attr.Value(42)) }, true},
 		{"int unset", func() bool { return attr.Required(attr.Type[int]{}) }, false},
+		{"bool false but set", func() bool { return attr.Required(attr.Value(false)) }, true},
 
-		// Sharp edges of the default branch: a *set* but nil/empty value whose
-		// type has no dedicated branch still counts as required, because
-		// any(typedNil) is a non-nil interface. These lock in current behavior
-		// (and document that the "non-nil" doc comment overstates the contract).
-		{"nil pointer, set", func() bool { return attr.Required(attr.Value((*int)(nil))) }, true},
-		{"nil non-special slice, set", func() bool { return attr.Required(attr.Value([]string(nil))) }, true},
+		// Pointers: a set-but-nil pointer is NOT satisfied; a non-nil one is.
+		{"nil pointer, set", func() bool { return attr.Required(attr.Value((*int)(nil))) }, false},
+		{"non-nil pointer", func() bool { i := 0; return attr.Required(attr.Value(&i)) }, true},
+
+		// Non-special slices/maps follow the same non-empty rule as []byte etc.
+		{"nil []string, set", func() bool { return attr.Required(attr.Value([]string(nil))) }, false},
+		{"empty []string, set", func() bool { return attr.Required(attr.Value([]string{})) }, false},
+		{"non-empty []string", func() bool { return attr.Required(attr.Value([]string{"a"})) }, true},
+		{"nil map, set", func() bool { return attr.Required(attr.Value(map[string]int(nil))) }, false},
+		{"non-empty map", func() bool { return attr.Required(attr.Value(map[string]int{"a": 1})) }, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

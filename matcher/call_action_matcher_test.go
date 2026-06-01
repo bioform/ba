@@ -287,6 +287,35 @@ func TestFailureMessages(t *testing.T) {
 	g.Expect(composite.NegatedFailureMessage(func() {})).ToNot(BeEmpty())
 }
 
+// TestMatchRestoresPreviousTracker is a regression test for the global
+// ba.CallTracker leak: a match that records a call must not bleed into a
+// subsequent match. Before the save/restore fix the second match below saw
+// the first match's recorded childAction call and wrongly succeeded.
+func TestMatchRestoresPreviousTracker(t *testing.T) {
+	g := NewWithT(t)
+	resetTracker(t)
+
+	g.Expect(ba.CallTracker).To(BeNil())
+
+	first := CallAction(&childAction{})
+	ok, err := first.Match(func() {
+		ba.New(t.Context(), &childAction{}).Perform()
+	})
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(ok).To(BeTrue())
+
+	// The global tracker is restored to its prior (nil) value.
+	g.Expect(ba.CallTracker).To(BeNil())
+
+	// A second match where childAction is NOT called must not match.
+	second := CallAction(&childAction{})
+	ok, err = second.Match(func() {
+		ba.New(t.Context(), &otherAction{}).Perform()
+	})
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(ok).To(BeFalse())
+}
+
 func TestCompositeRejectsNonFunctionActual(t *testing.T) {
 	g := NewWithT(t)
 

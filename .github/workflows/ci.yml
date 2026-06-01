@@ -30,21 +30,15 @@ jobs:
         run: go build ./...
 
       - name: Test
-        run: |
-          # Count coverage across the whole library so cross-package tests
-          # (e.g. matcher driving the core) are credited. Exclude generated
-          # mocks and the demo example mains, which aren't unit-tested.
-          COVERPKG=$(go list ./... | grep -vE '/mocks$|/examples/' | paste -sd, -)
-          go test -race -coverpkg="$COVERPKG" -coverprofile=coverage.out ./...
-          go tool cover -func=coverage.out | tail -1
+        # Instrument every package so cross-package tests (e.g. the matcher
+        # driving the core) are credited; the threshold check excludes
+        # generated mocks and demo example mains via .testcoverage.yml.
+        run: go test -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
 
-      - name: Enforce coverage threshold
-        run: |
-          THRESHOLD=90.0
-          total=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}' | tr -d '%')
-          echo "Total library coverage: ${total}% (minimum ${THRESHOLD}%)"
-          awk -v t="$THRESHOLD" -v c="$total" 'BEGIN { exit (c+0 < t+0) ? 1 : 0 }' \
-            || { echo "::error::coverage ${total}% is below the ${THRESHOLD}% threshold"; exit 1; }
+      - name: Check coverage threshold
+        uses: vladopajic/go-test-coverage@a93b868a4cbcbf18dc3781650fad241f0020e609 # v2.18.8
+        with:
+          config: ./.testcoverage.yml
 
       - name: Smoke-run examples
         run: |

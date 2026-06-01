@@ -37,6 +37,28 @@ type otherAction struct {
 func (a *otherAction) Perform() error                              { return nil }
 func (a *otherAction) TransactionProvider() ba.TransactionProvider { return dummy.TransactionProvider{} }
 
+// failA / failB always fail their bodies, used to drive the composite
+// matcher's "both children errored" join path via AndCallOriginal.
+type failA struct{ ba.BaseAction }
+
+func (a *failA) Perform() error                              { return errors.New("failA body failed") }
+func (a *failA) TransactionProvider() ba.TransactionProvider { return dummy.TransactionProvider{} }
+
+type failB struct{ ba.BaseAction }
+
+func (a *failB) Perform() error                              { return errors.New("failB body failed") }
+func (a *failB) TransactionProvider() ba.TransactionProvider { return dummy.TransactionProvider{} }
+
+// disabledAction is never enabled, so the matcher's stub path records the
+// resulting DisabledError without running the body.
+type disabledAction struct{ ba.BaseAction }
+
+func (a *disabledAction) Perform() error                              { return nil }
+func (a *disabledAction) TransactionProvider() ba.TransactionProvider { return dummy.TransactionProvider{} }
+func (a *disabledAction) IsEnabled() (bool, error) {
+	return false, ba.ErrorMap{"reason": "disabled"}
+}
+
 // resetTracker isolates each test from the global ba.CallTracker the matcher
 // installs (and, prior to the save/restore fix, leaves behind). Because
 // ba.CallTracker is process-global mutable state, tests using it must NOT call
@@ -328,4 +350,61 @@ func TestCompositeRejectsNonFunctionActual(t *testing.T) {
 	m := NewCompositeMatcher(CallAction(&childAction{}), CallAction(&otherAction{}))
 	_, err := m.Match("not a function")
 	g.Expect(err).To(HaveOccurred())
+}
+
+func TestCompositeFailsWhenOneActionMissing(t *testing.T) {
+	g := NewWithT(t)
+	resetTracker(t)
+
+	m := NewCompositeMatcher(CallAction(&childAction{}), CallAction(&otherAction{}))
+
+	// Only childAction is called; the composite must not match.
+	ok, err := m.Match(func() {
+		ba.New(t.Context(), &childAction{}).Perform()
+	})
+
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(ok).To(BeFalse())
+}
+
+func TestCompositeJoinsChildErrors(t *testing.T) {
+	g := NewWithT(t)
+	resetTracker(t)
+
+	// Both children run the real (failing) body, so both Match calls return an
+	// error and the composite joins them.
+	m := NewCompositeMatcher(
+		CallAction(&failA{}).AndCallOriginal(),
+		CallAction(&failB{}).AndCallOriginal(),
+	)
+
+	ok, err := m.Match(func() {
+		ba.New(t.Context(), &failA{}).Perform()
+		ba.New(t.Context(), &failB{}).Perform()
+	})
+
+	g.Expect(ok).To(BeFalse())
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(err.Error()).To(SatisfyAll(
+		ContainSubstring("failA body failed"),
+		ContainSubstring("failB body failed"),
+	))
+}
+
+func TestMatchStubRecordsDisabledError(t *testing.T) {
+	g := NewWithT(t)
+	resetTracker(t)
+
+	// Without AndCallOriginal the matcher still runs the lifecycle checks; a
+	// disabled action records the DisabledError, which surfaces as a matcher
+	// error.
+	m := CallAction(&disabledAction{})
+
+	ok, err := m.Match(func() {
+		ba.New(t.Context(), &disabledAction{}).Perform()
+	})
+
+	g.Expect(ok).To(BeFalse())
+	var disabledErr *ba.DisabledError
+	g.Expect(errors.As(err, &disabledErr)).To(BeTrue())
 }

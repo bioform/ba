@@ -118,7 +118,11 @@ var _ = Describe("ActionPerformer", func() {
 
 				ok, err := performer.Perform()
 				Expect(ok).To(BeFalse())
-				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError(ContainSubstring("perform failed")))
+				// A plain perform error is wrapped in a generic ActionError,
+				// not a lifecycle-specific error.
+				var actionErr *ba.ActionError
+				Expect(errors.As(err, &actionErr)).To(BeTrue())
 				Expect(err).ToNot(BeAssignableToTypeOf(&ba.ValidationError{}))
 			})
 
@@ -165,7 +169,9 @@ var _ = Describe("ActionPerformer", func() {
 
 				ok, err := performer.Perform()
 				Expect(ok).To(BeFalse())
-				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError(ContainSubstring("transaction failed")))
+				var actionErr *ba.ActionError
+				Expect(errors.As(err, &actionErr)).To(BeTrue())
 			})
 		})
 	})
@@ -229,7 +235,9 @@ var _ = Describe("ActionPerformer", func() {
 
 				ok, err := performer.Try()
 				Expect(ok).To(BeFalse())
-				Expect(err).To(HaveOccurred())
+				Expect(err).To(MatchError(ContainSubstring("perform failed")))
+				var actionErr *ba.ActionError
+				Expect(errors.As(err, &actionErr)).To(BeTrue())
 			})
 		})
 	})
@@ -268,7 +276,6 @@ var _ = Describe("ActionPerformer", func() {
 
 			It("should return false when action is not enabled", func() {
 				mockAction.EXPECT().Context().Return(ctx)
-				mockAction.EXPECT().Init()
 				mockAction.EXPECT().IsAllowed().Return(true, nil)
 				mockAction.EXPECT().IsEnabled().Return(false, ba.ErrorMap{"error": "action not enabled"})
 

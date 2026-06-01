@@ -1,0 +1,12 @@
+# Config for vladopajic/go-test-coverage (see CI). Gates total library
+# coverage; generated mocks and the demo example mains are excluded because
+# they aren't unit-tested.
+profile: coverage.out
+
+threshold:
+  total: 90
+
+exclude:
+  paths:
+    - ^mocks/
+    - ^examples/

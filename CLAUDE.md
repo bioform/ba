@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-`github.com/bioform/ba` is a Go library implementing a structured **Business Action** pattern (BA = "business action"). It provides a generic, type-safe framework for executing business operations with built-in transaction management, authorization, validation, feature flags, after-commit callbacks, and first-class testing support.
+`github.com/bioform/ba` is a Go library implementing a structured **Business Action** pattern (BA = "business action"). It provides a generic, type-safe framework for executing business operations with built-in transaction management, authorization, validation, feature-flag/precondition checks, after-commit callbacks, and first-class testing support.
 
 Inspired by Toptal's [`granite`](https://github.com/toptal/granite) Ruby gem.
 
@@ -41,7 +41,7 @@ CI runs build + race tests + `go mod tidy` cleanliness check on push/PR (see `.g
 `ba.New[A](ctx, action).Perform()` runs this sequence:
 
 1. **IsAllowed()** — authorization check (cached)
-2. **IsEnabled()** — feature flag check (cached)
+2. **IsEnabled()** — feature flag *or* state-dependent precondition (cached). Granite's "precondition" blocks live here — return `(false, ba.ErrorMap{...})` for any state-based reason the action shouldn't run (e.g. subject already in target state, system in maintenance, quota exceeded). The framework surfaces it as a `DisabledError`. See `examples/02_lifecycle_hooks` for a precondition use.
 3. **IsValid()** — validation check
 4. **Perform()** — business logic, wrapped in a transaction from `TransactionProvider`
 5. **AfterCommit callbacks** — run after the transaction commits
@@ -91,10 +91,11 @@ Expect(func() {
 
 ### Application layer pattern (from examples)
 
-The `examples/pkg/` directory shows the recommended wiring:
+The `examples/pkg/api/` directory shows the recommended wiring:
 
-- `api.go` — implements `TransactionProvider` by wrapping a GORM `*gorm.DB`; stored in `context.Context` under key `"api"`. When `Transaction(ctx, fn)` is invoked, it creates a new `api` instance bound to the GORM tx and re-publishes it on the lambda's context — that's how nested BAs see the transaction-scoped DB.
-- `base_action.go` — application-specific `BaseAction` that embeds `ba.BaseAction` and adds `API()` and `DB()` helpers that pull from context.
+- `examples/pkg/api/api.go` — implements `TransactionProvider` by wrapping a GORM `*gorm.DB`. When `Transaction(ctx, fn)` is invoked, it creates a new `api` instance bound to the GORM tx and re-publishes it on the lambda's context — that's how nested BAs see the transaction-scoped DB.
+- `examples/pkg/api/context.go` — context plumbing: `(*api).AddTo(ctx)` stores the instance under the package-private `apiKey`; `api.From(ctx)` retrieves it (returning `ErrNoAPI` / `ErrInvalidAPI`).
+- `examples/pkg/api/base_action.go` — application-specific `BaseAction` that embeds `ba.BaseAction` and adds `API()` and `DB()` helpers that pull from context via `api.From(ctx)`.
 - Actions embed the app-level `BaseAction`, not the library `BaseAction`, to get access to DB/API in `Perform()`.
 
 Context setup:

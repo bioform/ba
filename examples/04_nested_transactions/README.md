@@ -35,6 +35,8 @@ Expect(func() {
 
 Without `.AndCallOriginal()`, the matcher *stubs* `ActionB`'s body — useful when the inner action would fail (as it does in the savepoint demo). Adding `.AndCallOriginal()` runs the real body and additionally asserts it succeeded.
 
+*Incidentally also showcases `attr.Value(...)` equality in matchers — comparing `attr.Value(123)` matches both the value and the set flag, so an unset attribute won't accidentally compare equal to a zero-valued one.*
+
 Run the test:
 
 ```sh

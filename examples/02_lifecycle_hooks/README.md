@@ -13,6 +13,8 @@ The third run flips a global `SignupsEnabled` flag — flip it back to demonstra
 
 `IsEnabled` plays the role Granite calls "preconditions": state-dependent reasons an action shouldn't run, distinct from authorization (who) and validation (input shape).
 
+*Incidentally also showcases `attr.Type[T].IsSet()` — Run 1's `Init` only fills `Name` when the caller didn't pass it, which requires distinguishing "omitted" from "empty string".*
+
 Run it:
 
 ```sh

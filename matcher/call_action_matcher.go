@@ -80,14 +80,21 @@ func (m *CallActionMatcher[A]) Match(actual any) (bool, error) {
 		trackOpts = trackOpts.AndCallOriginal()
 	}
 
-	trackerCfg := tracker.NewTrackConfig(defaultAction, trackOpts)
-	callTracker := tracker.NewTestTracker(ba.CallTracker, trackerCfg)
-	ba.CallTracker = callTracker
-
 	fn, ok := actual.(func())
 	if !ok {
 		return false, fmt.Errorf("CallActionMatcher expects a function to execute")
 	}
+
+	trackerCfg := tracker.NewTrackConfig(defaultAction, trackOpts)
+	callTracker := tracker.NewTestTracker(ba.CallTracker, trackerCfg)
+
+	// Install our tracker for the duration of fn() only, then restore the
+	// previous value. Leaving it installed would leak recorded calls into
+	// later matches and other tests that share the global ba.CallTracker.
+	previous := ba.CallTracker
+	ba.CallTracker = callTracker
+	defer func() { ba.CallTracker = previous }()
+
 	fn()
 
 	tracks := callTracker.Get(m.ExpectedAction)

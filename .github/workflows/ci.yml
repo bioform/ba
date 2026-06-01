@@ -30,7 +30,15 @@ jobs:
         run: go build ./...
 
       - name: Test
-        run: go test -race -cover ./...
+        # Instrument every package so cross-package tests (e.g. the matcher
+        # driving the core) are credited; the threshold check excludes
+        # generated mocks and demo example mains via .testcoverage.yml.
+        run: go test -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
+
+      - name: Check coverage threshold
+        uses: vladopajic/go-test-coverage@a93b868a4cbcbf18dc3781650fad241f0020e609 # v2.18.8
+        with:
+          config: ./.testcoverage.yml
 
       - name: Smoke-run examples
         run: |
